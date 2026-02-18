@@ -1,0 +1,50 @@
+
+# Esta é a versão da especificação do arquivo docker-compose
+version: '3'
+
+services:
+  # Este será o nome do container. Você pode usar qualquer outro nome
+  laravel-app:
+      # O ambiente será construído a partir do Dockerfile contido neste diretório, por isso o ponto (.)
+      # Poderíamos ter especificado a URL de uma imagem específica em vez disso
+      build: .
+      # Redireciona a porta local 8888 para a porta 80 do container
+      ports:
+        - "8888:80"
+      volumes:
+        # Monta o conteúdo do diretório atual em /usr/share/nginx no container
+        - ./:/usr/share/nginx
+      # Especifica quais redes internas este container vai utilizar
+      # O próprio Docker gerencia os hostnames dos containers
+      networks:
+        - app-network
+  mysql-app:
+      # Em vez de definir o caminho para a imagem no Dockerfile, definimos aqui mesmo
+      image: mysql:5.7.22
+      # A porta 3307 da máquina hospedeira irá apontar para a 3306 do container
+      # Se for necessário acessar o MySQL do container por meio do MySQL Workbench, por exemplo, [...]
+        # a conexão deverá apontar para a porta 3307
+      ports:
+        - "3307:3306"
+      # Cria um diretório oculto .docker/dbdata dentro da pasta do projeto e [...]
+        # aponta o conteúdo de /var/lib/mysql do container para ele
+      # /var/lib/mysql é onde o MySQL mantém os dados
+      # Como o container não salva nada, os dados do MySQL precisam ser salvos fora dele
+      volumes:
+        - .docker/dbdata:/var/lib/mysql
+      # Define as variáveis de ambiente para criação da base de dados do projeto
+      environment:
+        MYSQL_DATABASE: dbname
+        MYSQL_ROOT_PASSWORD: pwd
+      # Permite a escrita em volumes no Windows 10
+      command:
+        'mysqld --innodb-flush-method=fsync'
+      networks:
+        - app-network
+
+# Define redes para os containers
+networks:
+    # Cria uma rede chamada app-network do tipo bridge para interligar os containers
+    app-network:
+      driver: bridge
+
