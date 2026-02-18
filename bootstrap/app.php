@@ -1,8 +1,12 @@
 <?php
 
+
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use App\Http\Middleware\RoleMiddleware;
+
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -12,7 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->group('api', [
+            //EnsureFrontendRequestsAreStateful::class, // Required for Sanctum
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ]);
+        $middleware->alias([
+            'role' => RoleMiddleware::class,  //register new role middleware
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
