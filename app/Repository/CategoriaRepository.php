@@ -3,19 +3,27 @@ namespace App\Repository;
 
 use App\Interfaces\CategoriaInterface;
 use App\Models\Categoria;
+use Illuminate\Support\Facades\Auth;
 
 class CategoriaRepository implements CategoriaInterface{
+    // apenas apra cointeúdos
+    public function categoriaIndexCriados()
+    {
+        $categoria = Categoria::all();
+        return $categoria;
+    }
     public function categoriaDeCriarConteudo($data)
     {
-        $categoria = new Categoria();
+        $data['user_id'] = Auth::id();
 
-        if($categoria->save()){
-            return response()->json(["success"=>"Salvo com sucesso "],201);
-        }else{
-            return response()->json(["error"=>"Não foi Salva"],500);
-        }
-        
+        $categoria = Categoria::create($data);
+
+        return response()->json([
+            "success" => "Salvo com sucesso",
+            "data" => $categoria
+        ], 201);
     }
+
 
     public function categoriaDeVenda()
     {
