@@ -4,12 +4,14 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-
+use App\Http\Controllers\CategoriaController;
 
 Route::post('/login',[AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
 Route::middleware(['auth:sanctum'])->group(function(){
+    Route::get('/categoria/index',[CategoriaController::class,'index']);
+    Route::post('/categoria',[CategoriaController::class,'store']);
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
