@@ -33,7 +33,7 @@ class CategoriaController extends Controller
             'nome_categoria'=>"required|string"
         ]);
         return $this->categoriaRepository
-                    ->categoriaDeCriarConteudo($data);
+                    ->categoriaDeCriarConteudo($data["nome_categoria"]);
     }
 
     /**

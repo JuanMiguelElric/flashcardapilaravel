@@ -14,14 +14,20 @@ class CategoriaRepository implements CategoriaInterface{
     }
     public function categoriaDeCriarConteudo($data)
     {
-        $data['user_id'] = Auth::id();
+        $dataforepo['user_id'] = Auth::id();
 
-        $categoria = Categoria::create($data);
-
-        return response()->json([
-            "success" => "Salvo com sucesso",
-            "data" => $categoria
-        ], 201);
+        $dataforepo['nome_categoria'] = $data;
+        $categoria = new Categoria($dataforepo);
+        if($categoria->save()){
+            
+                    return response()->json([
+                        "success" => "Salvo com sucesso",
+                        "data" => $categoria
+                    ], 201);
+            
+        }else{
+            dd("foi não");
+        }
     }
 
 
