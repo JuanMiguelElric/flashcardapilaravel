@@ -13,14 +13,15 @@ class AuthController extends Controller
     public function login (Request $request){
         
         //validar primeiramente meus dados
-        $request->validate([
-            'email'=>'required|email',
+
+      $data =  $request->validate([
+            'email'=>'required|string',
             'password'=>'required'
-        ]);
+            ]);            
+        $user = User::where('email',$data['email'])->first();
 
-        $user = User::where('email',$request->email())->first();
 
-        if(!$user || !Hash::check($request->password, $user->password)){
+        if(!$user || !Hash::check($data['password'], $user->password)){
             return response()->json(['message'=>'credencial invalida'],401);
         }
         $token = $user->createToken($user->role . '-token')->plainTextToken; // including the user's role for naming tokens
