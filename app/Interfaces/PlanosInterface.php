@@ -5,6 +5,6 @@ namespace App\Interfaces;
 
 interface PlanosInterface {
     public function cadastro($array);
-    public function promocao($valor);
+    public function promocao($id,$valor);
 }
 ?>

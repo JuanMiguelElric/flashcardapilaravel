@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Plano;
 use App\Http\Controllers\Controller;
-use App\Repository\PlanoRepository;
+use App\Repository\Plano\PlanoRepository;
 use Illuminate\Http\Request;
 
 class PlanosController extends Controller
@@ -12,7 +12,7 @@ class PlanosController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function __contruct(PlanoRepository $planorepository){
+    public function __construct(PlanoRepository $planorepository){
 
       $this->planoRepository = $planorepository;
 
@@ -28,12 +28,13 @@ class PlanosController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            "nome_plano"=>"required|string",
-            "descricao"=> "required|string",
+            "name_plano"=>"required|string",
+            "Descricao"=> "required|string",
             "valor"=> "required|numeric",
+            "desconto"=>"required|integer"
         ]);
 
-        return $this->planorepository->cadastro($data);
+        return $this->planoRepository->cadastro($data);
     }
 
     /**
