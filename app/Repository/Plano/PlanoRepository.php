@@ -19,6 +19,12 @@ class PlanoRepository implements PlanosInterface{
         }
 
     }
+    public function editarPlano($id, $array){
+        $plano = Plano::where("id", $id)->first();
+        if($plano->update($array)){
+            return response()->json(["success"=> true,"Plano editado comsucesso"=>$plano->id],201);
+        } 
+    }
 
 
 

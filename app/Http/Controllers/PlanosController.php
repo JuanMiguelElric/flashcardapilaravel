@@ -49,7 +49,14 @@ class PlanosController extends Controller
      */
     public function update(Request $request, Plano $plano)
     {
-        //
+        $data = $request->validate([
+            "nome_plano"=>"required|string",
+            "descricao"=>"required|string",
+            "valor"=>"required|numeric",
+            "desconto"=>"required|integer"
+            ]);
+
+            return $this->planoRepository->editarPlano($plano->id, $data);
     }
 
     /**

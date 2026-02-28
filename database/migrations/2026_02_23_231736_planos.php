@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('planos', function (Blueprint $table) {
+        Schema::create('planos', function (Blueprint $table) {
             $table->id();
             $table->string('name_plano')->default('client');
             $table->string('Descricao');
