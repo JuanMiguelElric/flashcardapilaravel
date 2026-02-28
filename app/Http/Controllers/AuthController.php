@@ -46,8 +46,16 @@ class AuthController extends Controller
         'email'     => 'required|email|unique:users,email',
         'password'  => 'required|min:6',
         'cpassword' => 'required|same:password',
-        'role'      => 'required|string',
+        
+       // 'role'      => 'required|string',
     ]);
+    if($validator['plano']== 'basico'){
+        $validator['role']= 'client';
+    }else if($validator['plano']== 'premium'){
+        $validator['role']= 'premium';
+    }else if($validator['plano'] == 'jorginho' ){
+        $validator['role']= 'admin';
+    }
 
     if ($validator->fails()) {
         return response()->json([
