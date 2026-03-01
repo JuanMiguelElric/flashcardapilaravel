@@ -26,7 +26,7 @@ Route::middleware(['auth:sanctum'])->group(function(){
         Route::post('/plano',[PlanosController::class,'store']);
     });
 
- Route::middleware(['role:seller'])->group(function(){
+ Route::middleware(['role:client'])->group(function(){
         Route::get('/seller-dashboard', function () {
             return  response()->json(['message'=>'Welcome Seller']);
         });

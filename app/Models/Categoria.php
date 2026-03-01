@@ -10,7 +10,7 @@ class Categoria extends Model
 {
     protected $table = "categorias";
 
-    protected $fillable = ["id","nome_categoria, user_id"];
+    protected $fillable = ["id","nome_categoria", "user_id"];
 
     public function usuario():HasMany{
         return $this->hasMany(User::class);

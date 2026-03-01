@@ -30,7 +30,8 @@ class CategoriaController extends Controller
     {
 
         $data = $request->validate([
-            'nome_categoria'=>"required|string"
+            'nome_categoria'=>"required|string",
+            
         ]);
         return $this->categoriaRepository
                     ->categoriaDeCriarConteudo($data["nome_categoria"]);
