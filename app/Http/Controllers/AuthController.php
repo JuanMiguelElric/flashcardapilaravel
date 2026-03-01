@@ -56,21 +56,20 @@ class AuthController extends Controller
      $plano = $request->input('plano');
     if($plano== 'plano 1'){
         if($this->planoSelecionadoRepository->VerificarPlanoSelecionado($plano) == true){
-            $validator['role']= 'client';
+            $data['role']= 'client';
         
         }else{
             return response()->json(['message'=> 'error']);
         }
     }else if($plano== 'plano 2'){
         if($this->planoSelecionadoRepository->VerificarPlanoSelecionado($plano) == true){
-            $validator['role']= 'premium';
+            $data['role']= 'premium';
         }else{
               return response()->json(['message'=> 'error']);
         }
     }else if($plano == 'jorginho' ){
-        $validator['role']= 'admin';
+        $data['role']= 'admin';
     }
-
     if ($validator->fails()) {
         return response()->json([
             'message' => 'Erro de validação',
@@ -79,12 +78,12 @@ class AuthController extends Controller
     }
 
     // Garante que não haverá created_at/updated_at vindos do request
-    $data = $request->only(['name', 'email', 'role']);
+    $data = $request->only(['name', 'email']);
     $data['password'] = Hash::make($request->password);
 
     // Criação do usuário usando Eloquent (Eloquent preencherá created_at/updated_at automaticamente)
     $user = User::create($data);
-
+    $this->planoSelecionadoRepository->gravarPlano($user->id, $plano);
     // Caso queira garantir timestamps corretos manualmente:
     // $user->created_at = now();
     // $user->updated_at = now();
