@@ -6,10 +6,14 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use App\Repository\Plano\PlanoSelecionado\PlanoSelecionadoRepository;
 
 class AuthController extends Controller
 {
     //
+    public function __construct(PlanoSelecionadoRepository $plano){
+        $this->planoSelecionadoRepository = $plano;
+    }
     public function login (Request $request){
         
         //validar primeiramente meus dados
@@ -39,7 +43,7 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         // Validação
-
+ 
     // Validação
     $validator = Validator::make($request->all(), [
         'name'      => 'required|string|max:255',
@@ -49,11 +53,21 @@ class AuthController extends Controller
         
        // 'role'      => 'required|string',
     ]);
-    if($validator['plano']== 'basico'){
-        $validator['role']= 'client';
-    }else if($validator['plano']== 'premium'){
-        $validator['role']= 'premium';
-    }else if($validator['plano'] == 'jorginho' ){
+     $plano = $request->input('plano');
+    if($plano== 'plano 1'){
+        if($this->planoSelecionadoRepository->VerificarPlanoSelecionado($plano) == true){
+            $validator['role']= 'client';
+        
+        }else{
+            return response()->json(['message'=> 'error']);
+        }
+    }else if($plano== 'plano 2'){
+        if($this->planoSelecionadoRepository->VerificarPlanoSelecionado($plano) == true){
+            $validator['role']= 'premium';
+        }else{
+              return response()->json(['message'=> 'error']);
+        }
+    }else if($plano == 'jorginho' ){
         $validator['role']= 'admin';
     }
 
