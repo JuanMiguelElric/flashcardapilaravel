@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\FlashcardController;
 use App\Http\Controllers\PlanosController;
 
 Route::post('/login',[AuthController::class, 'login']);
@@ -30,6 +31,8 @@ Route::middleware(['auth:sanctum'])->group(function(){
         Route::get('/seller-dashboard', function () {
             return  response()->json(['message'=>'Welcome Seller']);
         });
+
+        Route::post('/flashcard',[FlashcardController::class,'store'])->name('flashcard.store');
     });
 
 
