@@ -23,10 +23,26 @@ class FlashcardRepository implements FlashcardInterface {
               }
       
         }else{
+          $data = $flashCard;
+        $data["count_flashcard_register"] = $flashcardTable->count_flashcard_register + 1;
+
+        // Atualiza o flashcard existente
+        $card = Flashcard::where("categoria_id", $flashCard["categoria_id"])
+                         ->where("user_id", $flashCard["user_id"])
+                         ->first();
+
+        if ($card) {
+            if ($card->update($data)) {
+                   $this->createFlashcard($flashcardForGrafo);
+                return response()->json(["success" => "Flashcard atualizado com sucesso"], 200);
+            } else {
+                return response()->json(["error" => "Erro ao atualizar flashcard"], 500);
+            }
+        } else {
+            return response()->json(["error" => "Flashcard não encontrado"], 404);
         }
-        dd($flashcardTable);
-
-
+        }
+        
 
 
       }
