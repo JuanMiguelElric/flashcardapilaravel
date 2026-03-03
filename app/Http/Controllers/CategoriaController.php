@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Categoria;
 use Illuminate\Http\Request;
 use App\Repository\CategoriaRepository;
+use Illuminate\Support\Facades\Auth;
 
 class CategoriaController extends Controller
 {
@@ -31,10 +32,13 @@ class CategoriaController extends Controller
 
         $data = $request->validate([
             'nome_categoria'=>"required|string",
+            "icon"=>"required|string",
+            "color"=>"required|string"
             
         ]);
+        $data["user_id"]= Auth::user()->id;
         return $this->categoriaRepository
-                    ->categoriaDeCriarConteudo($data["nome_categoria"]);
+                    ->categoriaDeCriarConteudo($data);
     }
 
     /**
