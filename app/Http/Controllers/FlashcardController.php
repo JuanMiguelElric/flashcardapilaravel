@@ -20,7 +20,8 @@ class FlashcardController extends Controller
     }
     public function index()
     {
-        //
+        $user = Auth::user();   
+        return $this->flashcardRepository->RetornarFlashcardDecadaUsuario($user->id);
     }
 
     /**
@@ -29,14 +30,18 @@ class FlashcardController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'categoria_id'=>"required|integer",
-            "title"=>"required|string",
-            "type"=>"nullable|integer",
-            "description"=> "nullable|string",
-            "alternatives"=>"nullable|string",
-            "openRespostas"=>"nullable|string"
+     
+            'categoryId'=>"required|string",
+            //fronteend é question backeend está como title
+            "question"=>"required|string",
+            "type"=>"nullable|string",
+            //fronteend é content aqui no back é description
+            "content"=> "nullable|string",
+            // fronteend é options que é multipla escolha
+            "options"=>"nullable|string",
+            "answer"=>"nullable|string"
         ]);
-        $dataformysql['categoria_id']= $data['categoria_id'];
+        $dataformysql['categoria_id']= $data['categoryId'];
         $dataformysql['user_id'] = Auth::user()->id;
 
         return $this->flashcardRepository->addFlashCard($dataformysql,$data);

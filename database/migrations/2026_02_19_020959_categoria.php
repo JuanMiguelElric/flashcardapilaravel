@@ -15,6 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string("nome_categoria");
                         $table->timestamps();
+            $table->string("icon");
+            $table->string("color");
             $table->integer("user_id");
 
         });

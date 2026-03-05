@@ -10,8 +10,8 @@ class FlashcardRepository implements FlashcardInterface {
       public function addFlashCard( $flashCard,$flashcardForGrafo){
         //first add in mysql
 
-        
-        $flashcardTable = Flashcard::where("categoria_id",$flashCard["categoria_id"])->where("user_id",$flashCard["user_id"])->first();
+        $flashcardTable = Flashcard::where("categoria_id",(int)$flashCard["categoria_id"])->where("user_id",$flashCard["user_id"])->first();
+      
 
         if(empty($flashcardTable)){
             $data = $flashCard;
@@ -25,11 +25,10 @@ class FlashcardRepository implements FlashcardInterface {
         }else{
           $data = $flashCard;
         $data["count_flashcard_register"] = $flashcardTable->count_flashcard_register + 1;
-
         // Atualiza o flashcard existente
-        $card = Flashcard::where("categoria_id", $flashCard["categoria_id"])
-                         ->where("user_id", $flashCard["user_id"])
-                         ->first();
+        $card = Flashcard::where("categoria_id", (int)$flashCard["categoria_id"])
+        ->where("user_id", $flashCard["user_id"])
+        ->first();
 
         if ($card) {
             if ($card->update($data)) {
@@ -50,44 +49,71 @@ class FlashcardRepository implements FlashcardInterface {
 
       }
 
-  protected function createFlashcard($flashCard)
-{
-    $user = Auth::user()->id;
-    $categoria = Categoria::where("id", $flashCard["categoria_id"])->first();
+    protected function createFlashcard($flashCard)
+    {   
+        $user = Auth::user()->id;
 
-    $flashcardarray = [
-        "titulo" => $flashCard["title"],
-        "descricao" => ($flashCard["type"] == 0) ? $flashCard["description"] :
-            (($flashCard["type"] == 1) ? $flashCard["alternatives"] :
-                ($flashCard["type"] == 2 ? $flashCard["openRespostas"] : "Valor padrão")),
-    ];
+        $categoria = Categoria::where("id", (int)$flashCard["categoryId"])->first();
 
-   
-    $data = [
-        "categoria" => $categoria->nome_categoria,
-        "tipo" => $flashCard["type"]."",
-        "flashcard" => $flashcardarray,
-        "usuario" => $user
-    ];
- 
-    $url = "http://127.0.0.1:5000/submit_flash";
+        $flashcardarray = [
+            "question" => $flashCard["question"],
+            "summary"=> ($flashCard["type"] == "summary") ? $flashCard["content"] : null,
+            "open-ended"=> ($flashCard["type"] == "open-ended") ? $flashCard["open-ended"] : null,
+            "multiple-choice"=> ($flashCard["type"] == "multiple-choice") ? $flashCard["options"]:null,
+        ];
 
-    try {
-        $response = Http::timeout(10)
-                        ->withHeaders([
-                            'Content-Type' => 'application/json',  // Certifique-se de que está enviando JSON
-                        ])
-                        ->post($url, $data);  // Envia diretamente o array $data
+    
+        $data = [
+            "categoria" => $categoria->nome_categoria,
+            "tipo" => $flashCard["type"]."",
+            "flashcard" => $flashcardarray,
+            "usuario" => $user
+        ];
+    
+        $url = "http://127.0.0.1:5000/submit_flash";
 
-        if ($response->successful()) {
-            return response()->json($response->json(), 200); // Retorna o conteúdo da resposta
-        } else {
-            return response()->json(['error' => 'Erro na requisição'], $response->status());
+        try {
+            $response = Http::timeout(10)
+                            ->withHeaders([
+                                'Content-Type' => 'application/json',  // Certifique-se de que está enviando JSON
+                            ])
+                            ->post($url, $data);  // Envia diretamente o array $data
+
+            if ($response->successful()) {
+                return response()->json($response->json(), 200); // Retorna o conteúdo da resposta
+            } else {
+                return response()->json(['error' => 'Erro na requisição'], $response->status());
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()], 500);
     }
-}
+
+    public function RetornarFlashcardDecadaUsuario($usuario)
+    {
+        $url = "http://127.0.0.1:5000/flashcard/index";
+
+        $response = Http::timeout(10)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',  // Certifique-se de que está enviando JSON
+                ])
+                ->get($url);
+        $data =[];
+
+        foreach($response->json() as $flashCard) {
+            if($usuario == $flashCard['usuario']) {
+                //$categoria = Categoria::find($flashCard['categoria']);
+                $data['user']=[
+                    "categoria"=>$flashCard['categoria']['nome'],
+                    "question"=>(isset($flashCard["flashcard"]["titulo"])) ? $flashCard["flashcard"]["titulo"] : null ,
+                    "content"=>(isset($flashCard["flashcard"]["descricao"])) ? $flashCard["flashcard"]["descricao"]: null,
+                
+                ];
+            }
+
+        }
+        return response()->json($data);
+    }
 
 
 }

@@ -14,6 +14,10 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::middleware(['auth:sanctum'])->group(function(){
     Route::get('/categoria/index',[CategoriaController::class,'index']);
     Route::post('/categoria',[CategoriaController::class,'store']);
+
+    //FUNÇÃO para trazer todos os carcs
+    Route::get('/flashcard/index',[FlashcardController::class,'index']);
+
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -28,8 +32,10 @@ Route::middleware(['auth:sanctum'])->group(function(){
     });
 
  Route::middleware(['role:client'])->group(function(){
-        Route::get('/seller-dashboard', function () {
-            return  response()->json(['message'=>'Welcome Seller']);
+        Route::get('/me', function (Request $request) {
+            return response()->json([
+                'user' => $request->user(),
+            ]);
         });
 
         Route::post('/flashcard',[FlashcardController::class,'store'])->name('flashcard.store');
