@@ -58,8 +58,8 @@ class FlashcardRepository implements FlashcardInterface {
         $flashcardarray = [
             "question" => $flashCard["question"],
             "summary"=> ($flashCard["type"] == "summary") ? $flashCard["content"] : null,
-            "open-ended"=> ($flashCard["type"] == "open-ended") ? $flashCard["open-ended"] : null,
-            "multiple-choice"=> ($flashCard["type"] == "multiple-choice") ? $flashCard["options"]:null,
+            "answer"=> ($flashCard["type"] == "open-ended") ? $flashCard["open-ended"] : null,
+            "options"=> ($flashCard["type"] == "multiple-choice") ? $flashCard["options"]:null,
         ];
 
     
@@ -94,25 +94,46 @@ class FlashcardRepository implements FlashcardInterface {
         $url = "http://127.0.0.1:5000/flashcard/index";
 
         $response = Http::timeout(10)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',  // Certifique-se de que está enviando JSON
-                ])
-                ->get($url);
-        $data =[];
+                        ->withHeaders([
+                            'Content-Type' => 'application/json',
+                        ])
+                        ->get($url);
+        
+      //  dd($response->json());
+        
+        $data = []; // Array para armazenar os flashcards encontrados
 
-        foreach($response->json() as $flashCard) {
-            if($usuario == $flashCard['usuario']) {
-                //$categoria = Categoria::find($flashCard['categoria']);
-                $data['user']=[
-                    "categoria"=>$flashCard['categoria']['nome'],
-                    "question"=>(isset($flashCard["flashcard"]["titulo"])) ? $flashCard["flashcard"]["titulo"] : null ,
-                    "content"=>(isset($flashCard["flashcard"]["descricao"])) ? $flashCard["flashcard"]["descricao"]: null,
-                
-                ];
-            }
+        // Iterar sobre todos os flashcards retornados
+        foreach ($response->json() as $flashCard) {
+            $categoria = Categoria::where('nome_categoria',$flashCard['categoria'])->first();
+            // Verifica se o 'usuario' do flashcard corresponde ao usuário solicitado
+                if ($usuario == $flashCard['usuario']) {
 
+                    // Verifica se o campo 'flash' existe e não está vazio
+                        // Decodifica o campo 'flash' (que é uma string JSON)
+                        
+                        // Verifica se a decodificação foi bem-sucedida
+              
+                            // Adiciona o flashcard encontrado ao array de resultados
+                            $data['flashcards'][] = [
+                                'categoryId'=> $categoria->id,
+                                "question" => $flashCard['flashcard']['question'], // Defina um valor padrão caso 'titulo' não exista
+                                "type"=>$flashCard["tipo"],
+                                "descricao" => $flashCard['flashcard']['summary'] ?? 'Descrição não disponível', // Defina um valor padrão caso 'descricao' não exista
+                                "multiple-choice"=> $flashCardData['flashcard']["multiple-choice"] ??"",
+                            ];
+                        
+                    
+                }
+            
         }
-        return response()->json($data);
+
+        // Retorna os dados encontrados ou uma mensagem de erro caso não haja flashcards
+        if (empty($data['flashcards'])) {
+            return response()->json(['error' => 'Nenhum flashcard encontrado para este usuário'], 404);
+        }
+
+        return response()->json($data, 200);
     }
 
 
