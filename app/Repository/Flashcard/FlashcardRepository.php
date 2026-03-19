@@ -115,12 +115,13 @@ class FlashcardRepository implements FlashcardInterface {
                         // Verifica se a decodificação foi bem-sucedida
               
                             // Adiciona o flashcard encontrado ao array de resultados
-                            $data['flashcards'][] = [
+                            $data[] = [
                                 'categoryId'=> $categoria->id,
                                 "question" => $flashCard['flashcard']['question'], // Defina um valor padrão caso 'titulo' não exista
                                 "type"=>$flashCard["tipo"],
-                                "descricao" => $flashCard['flashcard']['summary'] ?? 'Descrição não disponível', // Defina um valor padrão caso 'descricao' não exista
-                                "multiple-choice"=> $flashCardData['flashcard']["multiple-choice"] ??"",
+                                "content" => $flashCard['flashcard']['summary'] ?? "", // Defina um valor padrão caso 'descricao' não exista
+                                "options"=> $flashCardData['flashcard']["multiple-choice"] ?? [],
+                              //  "answer"=> $flashCard[""][""] ??"",
                             ];
                         
                     
@@ -129,9 +130,6 @@ class FlashcardRepository implements FlashcardInterface {
         }
 
         // Retorna os dados encontrados ou uma mensagem de erro caso não haja flashcards
-        if (empty($data['flashcards'])) {
-            return response()->json(['error' => 'Nenhum flashcard encontrado para este usuário'], 404);
-        }
 
         return response()->json($data, 200);
     }
