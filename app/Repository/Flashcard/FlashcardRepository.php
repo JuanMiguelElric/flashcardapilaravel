@@ -89,50 +89,68 @@ class FlashcardRepository implements FlashcardInterface {
         }
     }
 
-    public function RetornarFlashcardDecadaUsuario($usuario)
-    {
-        $url = "http://127.0.0.1:5000/flashcard/index";
+public function RetornarFlashcardDecadaUsuario($usuario)
+{
+    $url = "http://127.0.0.1:5000/flashcard/index";
 
-        $response = Http::timeout(10)
-                        ->withHeaders([
-                            'Content-Type' => 'application/json',
-                        ])
-                        ->get($url);
-        
-      //  dd($response->json());
-        
-        $data = []; // Array para armazenar os flashcards encontrados
+    $response = Http::timeout(10)
+        ->withHeaders([
+            'Content-Type' => 'application/json',
+        ])
+        ->get($url);
 
-        // Iterar sobre todos os flashcards retornados
-        foreach ($response->json() as $flashCard) {
-            $categoria = Categoria::where('nome_categoria',$flashCard['categoria'])->first();
-            // Verifica se o 'usuario' do flashcard corresponde ao usuário solicitado
-                if ($usuario == $flashCard['usuario']) {
+    // 🔥 Validação da API
+    if (!$response->successful()) {
+        return response()->json(['erro' => 'Erro ao consumir API'], 500);
+    }
 
-                    // Verifica se o campo 'flash' existe e não está vazio
-                        // Decodifica o campo 'flash' (que é uma string JSON)
-                        
-                        // Verifica se a decodificação foi bem-sucedida
-              
-                            // Adiciona o flashcard encontrado ao array de resultados
-                            $data[] = [
-                                'categoryId'=> $categoria->id,
-                                "question" => $flashCard['flashcard']['question'], // Defina um valor padrão caso 'titulo' não exista
-                                "type"=>$flashCard["tipo"],
-                                "content" => $flashCard['flashcard']['summary'] ?? "", // Defina um valor padrão caso 'descricao' não exista
-                                "options"=> $flashCardData['flashcard']["multiple-choice"] ?? [],
-                              //  "answer"=> $flashCard[""][""] ??"",
-                            ];
-                        
-                    
-                }
-            
+    $json = $response->json();
+
+    if (!is_array($json)) {
+        return response()->json(['erro' => 'Resposta inválida da API'], 500);
+    }
+
+    $data = [];
+    $seen = [];
+
+    // 🔥 Evita N+1 (muito importante)
+    $categorias = Categoria::pluck('id', 'nome_categoria');
+
+    foreach ($json as $grupo) {
+
+        if (($grupo['usuario'] ?? null) != $usuario) {
+            continue;
         }
 
-        // Retorna os dados encontrados ou uma mensagem de erro caso não haja flashcards
+        if (!isset($grupo['flashcards']) || !is_array($grupo['flashcards'])) {
+            continue;
+        }
 
-        return response()->json($data, 200);
+        foreach ($grupo['flashcards'] as $flashcard) {
+
+            $key = md5(
+                ($grupo['categoria'] ?? '') .
+                ($flashcard['question'] ?? '') .
+                ($flashcard['summary'] ?? '')
+            );
+
+            if (isset($seen[$key])) continue;
+
+            $seen[$key] = true;
+
+            $data[] = [
+                'categoryId' => $categorias[$grupo['categoria']] ?? null,
+                "question"   => $flashcard['question'] ?? "",
+                "type"       => $grupo["tipo"] ?? "",
+                "content"    => $flashcard['summary'] ?? "",
+                "options"    => $flashcard['multiple_choice'] ?? [],
+            ];
+        }
     }
+
+    // ✅ AGORA SIM retorna
+    return response()->json($data, 200);
+}
 
 
 }
