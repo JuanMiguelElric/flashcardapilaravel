@@ -57,9 +57,17 @@ class FlashcardRepository implements FlashcardInterface {
 
         $flashcardarray = [
             "question" => $flashCard["question"],
-            "summary"=> ($flashCard["type"] == "summary") ? $flashCard["content"] : null,
-            "answer"=> ($flashCard["type"] == "open-ended") ? $flashCard["open-ended"] : null,
-            "options"=> ($flashCard["type"] == "multiple-choice") ? $flashCard["options"]:null,
+            "summary"  => $flashCard["type"] == "summary" 
+                ? ($flashCard["content"] ?? null) 
+                : null,
+
+            "answer"   => $flashCard["type"] == "open-ended" 
+                ? ($flashCard["answer"] ?? null) 
+                : null,
+
+            "options"  => $flashCard["type"] == "multiple-choice" 
+                ? ($flashCard["options"] ?? []) 
+                : null,
         ];
 
     
@@ -137,13 +145,14 @@ public function RetornarFlashcardDecadaUsuario($usuario)
             if (isset($seen[$key])) continue;
 
             $seen[$key] = true;
-
+            $jsondecode = json_decode($flashcard['multiple_choice']);
             $data[] = [
                 'categoryId' => $categorias[$grupo['categoria']] ?? null,
                 "question"   => $flashcard['question'] ?? "",
                 "type"       => $grupo["tipo"] ?? "",
                 "content"    => $flashcard['summary'] ?? "",
-                "options"    => $flashcard['multiple_choice'] ?? [],
+                "options"    => $jsondecode ?? [],
+                "answer"    => $flashcard["answer"] ??"",
             ];
         }
     }
