@@ -10,9 +10,15 @@ class Categoria extends Model
 {
     protected $table = "categorias";
 
-    protected $fillable = ["id","nome_categoria","icon","color", "user_id"];
+    protected $fillable = ["nome_categoria","icon","color", "user_id"];
 
-    public function usuario():HasMany{
-        return $this->hasMany(User::class);
+    public function usuario(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function flashcardItems(): HasMany
+    {
+        return $this->hasMany(FlashcardItem::class);
     }
 }

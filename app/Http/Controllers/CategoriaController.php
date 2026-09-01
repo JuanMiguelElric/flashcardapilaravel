@@ -2,66 +2,55 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreCategoriaRequest;
+use App\Http\Requests\UpdateCategoriaRequest;
 use App\Models\Categoria;
-use Illuminate\Http\Request;
 use App\Repository\CategoriaRepository;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
 
 class CategoriaController extends Controller
 {
-     protected $categoriaRepository;
-
-
-     public function __construct(CategoriaRepository $categoriaRepository)
-     {
-        $this->categoriaRepository = $categoriaRepository;
-     }
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function __construct(private CategoriaRepository $categoriaRepository)
     {
-        return $this->categoriaRepository->categoriaIndexCriados();
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function index(Request $request)
     {
-
-        $data = $request->validate([
-            'nome_categoria'=>"required|string",
-            "icon"=>"required|string",
-            "color"=>"required|string"
-            
-        ]);
-        $data["user_id"]= Auth::user()->id;
-        return $this->categoriaRepository
-                    ->categoriaDeCriarConteudo($data);
+        return response()->json($this->categoriaRepository->categoriaIndexCriados($request->user()));
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Categoria $categoria)
+    public function store(StoreCategoriaRequest $request)
     {
-        //
+        $categoria = $this->categoriaRepository->categoriaDeCriarConteudo(
+            $request->validated(),
+            $request->user()
+        );
+
+        return response()->json($categoria, 201);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Categoria $categoria)
+    public function show(Request $request, Categoria $categoria)
     {
-        //
+        return response()->json(
+            $this->categoriaRepository->categoriaDeMostrar($categoria, $request->user())
+        );
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Categoria $categoria)
+    public function update(UpdateCategoriaRequest $request, Categoria $categoria)
     {
-        //
+        $updated = $this->categoriaRepository->categoriaDeAtualizar(
+            $categoria,
+            $request->user(),
+            $request->validated()
+        );
+
+        return response()->json($updated);
+    }
+
+    public function destroy(Request $request, Categoria $categoria)
+    {
+        $this->categoriaRepository->categoriaDeExcluir($categoria, $request->user());
+
+        return response()->json(null, 204);
     }
 }
