@@ -6,7 +6,6 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -56,8 +55,13 @@ class User extends Authenticatable
         ];
     }
 
-    public function categorias():BelongsTo
+    public function categorias(): HasMany
     {
-        return $this->belongsTo(Categoria::class);
+        return $this->hasMany(Categoria::class);
+    }
+
+    public function flashcardItems(): HasMany
+    {
+        return $this->hasMany(FlashcardItem::class);
     }
 }

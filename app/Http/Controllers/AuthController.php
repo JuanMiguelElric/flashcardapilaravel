@@ -6,98 +6,74 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use App\Repository\Plano\PlanoSelecionado\PlanoSelecionadoRepository;
 
 class AuthController extends Controller
 {
-    //
-    public function __construct(PlanoSelecionadoRepository $plano){
-        $this->planoSelecionadoRepository = $plano;
-    }
-    public function login (Request $request){
-        
-        //validar primeiramente meus dados
+    public function login(Request $request)
+    {
+        $data = $request->validate([
+            'email' => 'required|string',
+            'password' => 'required',
+        ]);
 
-      $data =  $request->validate([
-            'email'=>'required|string',
-            'password'=>'required'
-            ]);            
-        $user = User::where('email',$data['email'])->first();
+        $user = User::where('email', $data['email'])->first();
 
-
-        if(!$user || !Hash::check($data['password'], $user->password)){
-            return response()->json(['message'=>'credencial invalida'],401);
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
+            return response()->json(['message' => 'credencial invalida'], 401);
         }
-        $token = $user->createToken($user->role . '-token')->plainTextToken; // including the user's role for naming tokens
 
-        // Return the generated token and user's role
-        return  response()->json(['token'=>$token,'role'=>$user->role]);
+        $token = $user->createToken($user->role.'-token')->plainTextToken;
+
+        return response()->json(['token' => $token, 'role' => $user->role]);
     }
+
     public function logout(Request $request)
     {
-       // Revoke all tokens for the authenticated user
-        $request->user()?->tokens()?->delete();  // null-safe operator is used in logout to prevent errors if the user is somehow null
+        $request->user()?->tokens()?->delete();
+
         return response()->json(['message' => 'Logged out successfully']);
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json(['user' => $request->user()]);
     }
 
     public function register(Request $request)
     {
-        // Validação
- 
-    // Validação
-    $validator = Validator::make($request->all(), [
-        'name'      => 'required|string|max:255',
-        'email'     => 'required|email|unique:users,email',
-        'password'  => 'required|min:6',
-        'cpassword' => 'required|same:password',
-        
-       // 'role'      => 'required|string',
-    ]);
-     $plano = $request->input('plano');
-    if($plano== 'plano 1'){
-        if($this->planoSelecionadoRepository->VerificarPlanoSelecionado($plano) == true){
-            $data['role']= 'client';
-        
-        }else{
-            return response()->json(['message'=> 'error']);
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:6',
+            'cpassword' => 'required|same:password',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $validator->errors(),
+            ], 422);
         }
-    }else if($plano== 'plano 2'){
-        if($this->planoSelecionadoRepository->VerificarPlanoSelecionado($plano) == true){
-            $data['role']= 'premium';
-        }else{
-              return response()->json(['message'=> 'error']);
-        }
-    }else if($plano == 'jorginho' ){
-        $data['role']= 'admin';
-    }
-    if ($validator->fails()) {
+
+        // O React só exibe a escolha de plano DEPOIS do cadastro (ver
+        // PlanSelectionModal em memory-spark) - nenhum plano é enviado
+        // neste payload. O usuário nasce com o role default do banco
+        // ('client'); associar um plano/role diferente é um fluxo
+        // separado, ainda não integrado ao backend (ver relatório de
+        // gaps - Payment.tsx é mock hoje, sem chamada real à API).
+        $user = User::create([
+            'name' => $request->string('name'),
+            'email' => $request->string('email'),
+            'password' => Hash::make($request->string('password')),
+            'role' => 'client',
+        ]);
+
+        $token = $user->createToken($user->role.'-token')->plainTextToken;
+
         return response()->json([
-            'message' => 'Erro de validação',
-            'errors'  => $validator->errors()
-        ], 422);
+            'token' => $token,
+            'name' => $user->name,
+            'role' => $user->role,
+        ], 201);
     }
-
-    // Garante que não haverá created_at/updated_at vindos do request
-    $data = $request->only(['name', 'email']);
-    $data['password'] = Hash::make($request->password);
-
-    // Criação do usuário usando Eloquent (Eloquent preencherá created_at/updated_at automaticamente)
-    $user = User::create($data);
-    $this->planoSelecionadoRepository->gravarPlano($user->id, $plano);
-    // Caso queira garantir timestamps corretos manualmente:
-    // $user->created_at = now();
-    // $user->updated_at = now();
-    // $user->save();
-
-    // Token
-    $token = $user->createToken('MyApp')->plainTextToken;
-
-    return response()->json([
-        'token' => $token,
-        'name'  => $user->name
-    ], 201);
-
-    }
-
-
 }
