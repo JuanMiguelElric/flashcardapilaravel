@@ -51,8 +51,8 @@ class PlanosController extends Controller
     public function update(Request $request, Plano $plano)
     {
         $data = $request->validate([
-            "nome_plano"=>"required|string",
-            "descricao"=>"required|string",
+            "name_plano"=>"required|string",
+            "Descricao"=>"required|string",
             "valor"=>"required|numeric",
             "desconto"=>"required|integer"
             ]);
