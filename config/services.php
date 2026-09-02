@@ -47,6 +47,14 @@ return [
         'url' => env('FLASHCARD_SERVICE_URL', 'http://127.0.0.1:5000'),
         'token' => env('FLASHCARD_SERVICE_TOKEN'),
         'timeout' => env('FLASHCARD_SERVICE_TIMEOUT', 10),
+
+        // Retry só para falhas transitórias (timeout/conexão recusada ou
+        // 5xx do Python) - nunca para 4xx (erro definitivo: validação,
+        // ownership, etc.). Seguro porque a escrita no Python é
+        // idempotente (MERGE por flashcard_id): reenviar a mesma
+        // requisição não duplica nada.
+        'retry_times' => env('FLASHCARD_SERVICE_RETRY_TIMES', 3),
+        'retry_delay_ms' => env('FLASHCARD_SERVICE_RETRY_DELAY_MS', 150),
     ],
 
 ];

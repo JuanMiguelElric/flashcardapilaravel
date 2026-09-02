@@ -1,14 +1,19 @@
 <?php
+
 namespace App\Repository;
 
 use App\Interfaces\CategoriaInterface;
 use App\Models\Categoria;
 use App\Models\User;
+use App\Services\FlashcardService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CategoriaRepository implements CategoriaInterface
 {
+    public function __construct(private FlashcardService $flashcardService) {}
+
     public function categoriaIndexCriados(User $user)
     {
         return Categoria::where('user_id', $user->id)->get();
@@ -41,7 +46,17 @@ class CategoriaRepository implements CategoriaInterface
     {
         $this->authorizeOwnership($categoria, $user);
 
-        $categoria->delete();
+        // flashcard_items.categoria_id tem cascadeOnDelete() no MySQL -
+        // sem remover primeiro o conteúdo no Python/Neo4j, o cascade
+        // apagaria os flashcard_items localmente sem nunca avisar o
+        // Python, deixando nodes :flashcard órfãos no Neo4j. Ver
+        // FlashcardService::deleteAllForCategoria para a limitação
+        // estrutural documentada (MySQL/Neo4j não têm transação
+        // distribuída real).
+        DB::transaction(function () use ($categoria, $user) {
+            $this->flashcardService->deleteAllForCategoria($categoria, $user);
+            $categoria->delete();
+        });
     }
 
     public function categoriaDeMostrar(Categoria $categoria, User $user): Categoria

@@ -18,14 +18,22 @@ use Illuminate\Support\Facades\Log;
 class FlashcardServiceClient
 {
     private string $baseUrl;
+
     private ?string $token;
+
     private int $timeout;
+
+    private int $retryTimes;
+
+    private int $retryDelayMs;
 
     public function __construct()
     {
         $this->baseUrl = rtrim(config('services.flashcard_service.url'), '/');
         $this->token = config('services.flashcard_service.token');
         $this->timeout = (int) config('services.flashcard_service.timeout', 10);
+        $this->retryTimes = max(1, (int) config('services.flashcard_service.retry_times', 3));
+        $this->retryDelayMs = (int) config('services.flashcard_service.retry_delay_ms', 150);
     }
 
     /**
@@ -100,23 +108,71 @@ class FlashcardServiceClient
     }
 
     /**
-     * Executa a chamada HTTP, traduzindo qualquer falha (timeout, conexão
-     * recusada, status >= 400) em FlashcardServiceException - o chamador
-     * nunca vê a exceção bruta do cliente HTTP.
+     * Executa a chamada HTTP, com retry para falhas transitórias
+     * (timeout/conexão recusada ou 5xx do Python), traduzindo a falha
+     * definitiva (esgotadas as tentativas, ou status 4xx) em
+     * FlashcardServiceException - o chamador nunca vê a exceção bruta do
+     * cliente HTTP.
+     *
+     * Retry é seguro aqui porque toda escrita no Python é idempotente
+     * (MERGE por flashcard_id, nunca por título): reenviar a mesma
+     * requisição depois de uma resposta perdida não cria duplicação, e é
+     * exatamente o cenário (resposta HTTP perdida após o Python já ter
+     * persistido no Neo4j) em que o retry resolve a inconsistência ao
+     * invés de deixar o MySQL ser revertido enquanto o Neo4j já commitou.
      */
     private function send(\Closure $call, string $operation): array
     {
-        try {
-            $response = $call();
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            Log::warning("FlashcardServiceClient::{$operation} inalcançável", [
-                'message' => $e->getMessage(),
-            ]);
+        $lastConnectionException = null;
 
-            throw FlashcardServiceException::unreachable($operation, $e);
+        for ($attempt = 1; $attempt <= $this->retryTimes; $attempt++) {
+            try {
+                $response = $call();
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                $lastConnectionException = $e;
+
+                if ($attempt < $this->retryTimes) {
+                    Log::warning("FlashcardServiceClient::{$operation} inalcançável, tentativa {$attempt}/{$this->retryTimes}", [
+                        'message' => $e->getMessage(),
+                    ]);
+
+                    $this->wait($attempt);
+
+                    continue;
+                }
+
+                Log::warning("FlashcardServiceClient::{$operation} inalcançável após {$attempt} tentativas", [
+                    'message' => $e->getMessage(),
+                ]);
+
+                throw FlashcardServiceException::unreachable($operation, $e);
+            }
+
+            if ($response->serverError() && $attempt < $this->retryTimes) {
+                Log::warning("FlashcardServiceClient::{$operation} respondeu erro de servidor, tentativa {$attempt}/{$this->retryTimes}", [
+                    'status' => $response->status(),
+                ]);
+
+                $this->wait($attempt);
+
+                continue;
+            }
+
+            return $this->handle($response, $operation);
         }
 
-        return $this->handle($response, $operation);
+        // Não deveria ser alcançável (o laço sempre retorna ou lança
+        // dentro de si), mas mantém o contrato de tipo do método.
+        throw FlashcardServiceException::unreachable($operation, $lastConnectionException ?? new \RuntimeException('Retry esgotado.'));
+    }
+
+    private function wait(int $attempt): void
+    {
+        if ($this->retryDelayMs <= 0) {
+            return;
+        }
+
+        usleep($this->retryDelayMs * 1000 * $attempt);
     }
 
     private function handle($response, string $operation): array

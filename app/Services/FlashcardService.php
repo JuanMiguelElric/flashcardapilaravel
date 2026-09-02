@@ -18,9 +18,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class FlashcardService
 {
-    public function __construct(private FlashcardServiceClient $client)
-    {
-    }
+    public function __construct(private FlashcardServiceClient $client) {}
 
     public function create(User $user, array $data): array
     {
@@ -91,6 +89,44 @@ class FlashcardService
         });
     }
 
+    /**
+     * Remove no Python/Neo4j o conteúdo de todos os flashcards de uma
+     * categoria - deve ser chamado ANTES da categoria ser excluída no
+     * MySQL, pelo mesmo motivo do delete() acima: flashcard_items.
+     * categoria_id tem cascadeOnDelete() (ver migration
+     * 2026_08_31_120000_create_flashcard_items_table.php), então excluir
+     * a categoria apagaria os flashcard_items em cascata no MySQL sem
+     * nunca avisar o Python - deixando nodes :flashcard órfãos no Neo4j.
+     *
+     * O chamador (CategoriaRepository::categoriaDeExcluir) deve envolver
+     * esta chamada e o $categoria->delete() na MESMA DB::transaction: se
+     * qualquer delete no Python falhar, a exceção propaga e nada é
+     * apagado no MySQL (nem a categoria, nem os flashcard_items).
+     *
+     * Limitação estrutural documentada: MySQL e Neo4j não compartilham
+     * uma transação distribuída real. Numa categoria com múltiplos
+     * flashcards, se o Python confirmar a remoção do item N e só falhar
+     * no item N+1 (após esgotar o retry de FlashcardServiceClient), o
+     * MySQL desta transação é revertido por inteiro (nada é apagado),
+     * mas o node do item N já foi removido do Neo4j - o flashcard_item N
+     * continua existindo no MySQL sem conteúdo correspondente no Neo4j.
+     * O retry embutido em FlashcardServiceClient::send() reduz bastante a
+     * chance disso (cada chamada já tenta se recuperar sozinha antes de
+     * desistir), mas não a elimina - resolver por completo exigiria uma
+     * transação distribuída real (saga/compensação) fora do escopo desta
+     * correção mínima.
+     */
+    public function deleteAllForCategoria(Categoria $categoria, User $user): void
+    {
+        $items = FlashcardItem::where('categoria_id', $categoria->id)
+            ->where('user_id', $user->id)
+            ->get();
+
+        foreach ($items as $item) {
+            $this->client->deleteFlashcard($item->id, $user->id);
+        }
+    }
+
     private function authorizeOwnership(FlashcardItem $item, User $user): void
     {
         if ((int) $item->user_id !== (int) $user->id) {
@@ -111,6 +147,18 @@ class FlashcardService
         return $categoria;
     }
 
+    /**
+     * NOTA DE MODELAGEM (não sincronizado - decisão a confirmar com negócio):
+     * Categoria aqui é a entidade MySQL (id, user_id, nome_categoria).
+     * O Python/Neo4j não conhece esse id - ele recebe só o NOME da
+     * categoria e faz MERGE num node (:categoria) global, compartilhado
+     * entre todos os usuários. São entidades desacopladas: renomear uma
+     * Categoria no MySQL não atualiza o node (:categoria) já criado no
+     * Neo4j com o nome antigo (os flashcards antigos continuam agrupados
+     * sob o nome anterior). Nenhuma chamada ao Python existe em
+     * CategoriaController/CategoriaRepository. Não implementar
+     * sincronização sem requisito de negócio explícito.
+     */
     private function buildContentPayload(Categoria $categoria, User $user, array $data, string $type): array
     {
         return [
@@ -151,19 +199,20 @@ class FlashcardService
      * cujo campo "usuario" bate com o usuário autenticado - nunca um
      * valor vindo do cliente.
      *
-     * Associação por flashcard_id (ideal) só é possível quando o Python
-     * devolve esse campo. Enquanto isso não existir do lado do Python,
-     * usamos um fallback best-effort (consome flashcard_items da mesma
-     * categoria em ordem) - ver relatório de gaps.
+     * A associação de cada flashcard ao seu ID canônico usa sempre
+     * flashcard_id, devolvido pelo Python em GET /flashcard/index
+     * (confirmado em flashcard_repository.py::list_for_user, campo
+     * incluso em toda entrada de "flashcards"). Um fallback posicional
+     * best-effort existiu aqui até esta revisão para o caso do Python não
+     * devolver esse campo; foi removido por ser código morto - reintroduza
+     * apenas se o contrato do Python mudar para omitir flashcard_id.
      */
     private function mergeContent($items, array $rawGroups, int $userId): array
     {
-        $itemsByCategoria = $items->groupBy('categoria_id');
         $categoriaIdByName = $items->pluck('categoria.id', 'categoria.nome_categoria');
 
         $result = [];
         $seen = [];
-        $consumedItemIds = [];
 
         foreach ($rawGroups as $grupo) {
             if (! is_array($grupo) || (string) ($grupo['usuario'] ?? null) !== (string) $userId) {
@@ -185,16 +234,6 @@ class FlashcardService
                 $seen[$key] = true;
 
                 $flashcardId = $flashcard['flashcard_id'] ?? null;
-
-                if ($flashcardId === null && $categoriaId !== null) {
-                    $candidate = ($itemsByCategoria[$categoriaId] ?? collect())
-                        ->first(fn ($item) => ! in_array($item->id, $consumedItemIds, true));
-
-                    if ($candidate) {
-                        $flashcardId = $candidate->id;
-                        $consumedItemIds[] = $flashcardId;
-                    }
-                }
 
                 $options = json_decode($flashcard['multiple_choice'] ?? 'null', true);
 

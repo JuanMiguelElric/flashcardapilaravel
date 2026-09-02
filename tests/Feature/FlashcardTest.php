@@ -111,6 +111,55 @@ class FlashcardTest extends TestCase
         $this->assertSame(0, FlashcardItem::count());
     }
 
+    public function test_falha_transitoria_do_python_e_recuperada_por_retry(): void
+    {
+        // Primeira tentativa falha (500 transitório), segunda tem sucesso.
+        // O retry deve engolir a falha transitória e concluir com 201,
+        // sem deixar MySQL e Neo4j inconsistentes.
+        Http::fake([
+            '*/submit_flash' => Http::sequence()
+                ->push(['error' => 'boom'], 500)
+                ->push(['status' => 'ok'], 200),
+        ]);
+
+        $user = $this->clientUser();
+        $categoria = $this->categoriaDe($user);
+
+        $response = $this->actingAs($user)->postJson('/api/flashcard', [
+            'categoryId' => $categoria->id,
+            'type' => 'summary',
+            'question' => 'Capital do Brasil',
+            'content' => 'Brasília',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertSame(1, FlashcardItem::count(), 'O retry deve recuperar a falha transitória e persistir normalmente.');
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_falha_definitiva_4xx_do_python_nao_e_reenviada(): void
+    {
+        // 4xx é erro definitivo (ex.: payload rejeitado) - não deve
+        // consumir tentativas de retry, só as transitórias (timeout/5xx).
+        Http::fake(['*/submit_flash' => Http::response(['error' => 'invalid'], 422)]);
+
+        $user = $this->clientUser();
+        $categoria = $this->categoriaDe($user);
+
+        $response = $this->actingAs($user)->postJson('/api/flashcard', [
+            'categoryId' => $categoria->id,
+            'type' => 'summary',
+            'question' => 'Capital do Brasil',
+            'content' => 'Brasília',
+        ]);
+
+        $response->assertStatus(502);
+        $this->assertSame(0, FlashcardItem::count());
+
+        Http::assertSentCount(1);
+    }
+
     public function test_tipo_audio_envia_translation_e_audio_url_ao_python(): void
     {
         Http::fake(['*/submit_flash' => Http::response(['status' => 'ok'], 200)]);
@@ -248,6 +297,37 @@ class FlashcardTest extends TestCase
 
         $response->assertStatus(502);
         $this->assertDatabaseHas('flashcard_items', ['id' => $item->id]);
+    }
+
+    public function test_falha_transitoria_no_delete_e_recuperada_por_retry_mesmo_com_python_ja_tendo_removido(): void
+    {
+        // Cenário do gap de idempotência: a 1ª tentativa perde a resposta
+        // (timeout) depois do Python já ter removido o node no Neo4j; a 2ª
+        // tentativa (retry) encontra o node ausente e, por ser idempotente,
+        // responde 204 em vez de 404 - então o retry conclui com sucesso e
+        // o MySQL não sofre rollback por um 404 espúrio.
+        $attempts = 0;
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('Connection timed out');
+            }
+
+            return Http::response('', 204);
+        });
+
+        $user = $this->clientUser();
+        $categoria = $this->categoriaDe($user);
+        $item = FlashcardItem::create(['user_id' => $user->id, 'categoria_id' => $categoria->id, 'type' => 'summary']);
+
+        $response = $this->actingAs($user)->deleteJson("/api/flashcard/{$item->id}");
+
+        $response->assertStatus(204);
+        $this->assertDatabaseMissing('flashcard_items', ['id' => $item->id]);
+        // Http::fake só registra respostas em Http::recorded(), não tentativas
+        // que lançam exceção - por isso o contador de tentativas é local.
+        $this->assertSame(2, $attempts, 'A 1ª tentativa deve falhar por timeout e a 2ª (retry) deve suceder.');
     }
 
     public function test_usuario_nao_atualiza_nem_exclui_flashcard_de_outro(): void

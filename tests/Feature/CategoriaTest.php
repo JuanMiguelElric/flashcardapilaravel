@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Categoria;
+use App\Models\FlashcardItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CategoriaTest extends TestCase
@@ -103,5 +105,87 @@ class CategoriaTest extends TestCase
             ->assertStatus(204);
 
         $this->assertDatabaseMissing('categorias', ['id' => $categoria->id]);
+    }
+
+    /**
+     * Regressão: flashcard_items.categoria_id tem cascadeOnDelete() no
+     * MySQL. Sem a correção, excluir uma categoria com flashcards apagava
+     * os flashcard_items em cascata sem nunca avisar o Python, deixando
+     * nodes :flashcard órfãos no Neo4j.
+     */
+    public function test_categoria_sem_flashcards_e_excluida_sem_chamar_python(): void
+    {
+        Http::fake(); // qualquer chamada HTTP falha o teste (nenhuma é esperada)
+
+        $user = User::factory()->create(['role' => 'client']);
+        $categoria = Categoria::create([
+            'nome_categoria' => 'Vazia', 'icon' => '📚', 'color' => 'x', 'user_id' => $user->id,
+        ]);
+
+        $this->actingAs($user)->deleteJson("/api/categoria/{$categoria->id}")->assertStatus(204);
+
+        $this->assertDatabaseMissing('categorias', ['id' => $categoria->id]);
+        Http::assertNothingSent();
+    }
+
+    public function test_categoria_com_flashcards_remove_conteudo_no_python_antes_de_excluir_no_mysql(): void
+    {
+        Http::fake(['*/flashcard/*' => Http::response(['status' => 'ok'], 200)]);
+
+        $user = User::factory()->create(['role' => 'client']);
+        $categoria = Categoria::create([
+            'nome_categoria' => 'Matemática', 'icon' => '🧮', 'color' => 'x', 'user_id' => $user->id,
+        ]);
+        $item1 = FlashcardItem::create(['user_id' => $user->id, 'categoria_id' => $categoria->id, 'type' => 'summary']);
+        $item2 = FlashcardItem::create(['user_id' => $user->id, 'categoria_id' => $categoria->id, 'type' => 'summary']);
+
+        $this->actingAs($user)->deleteJson("/api/categoria/{$categoria->id}")->assertStatus(204);
+
+        $this->assertDatabaseMissing('categorias', ['id' => $categoria->id]);
+        $this->assertDatabaseMissing('flashcard_items', ['id' => $item1->id]);
+        $this->assertDatabaseMissing('flashcard_items', ['id' => $item2->id]);
+
+        Http::assertSent(fn ($request) => $request->url() === "http://127.0.0.1:5000/flashcard/{$item1->id}"
+            && $request->method() === 'DELETE'
+            && $request['usuario'] === $user->id);
+        Http::assertSent(fn ($request) => $request->url() === "http://127.0.0.1:5000/flashcard/{$item2->id}"
+            && $request->method() === 'DELETE'
+            && $request['usuario'] === $user->id);
+        Http::assertSentCount(2);
+    }
+
+    public function test_falha_do_python_ao_excluir_categoria_preserva_categoria_e_flashcards_no_mysql(): void
+    {
+        Http::fake(['*/flashcard/*' => Http::response(['error' => 'boom'], 500)]);
+
+        $user = User::factory()->create(['role' => 'client']);
+        $categoria = Categoria::create([
+            'nome_categoria' => 'Matemática', 'icon' => '🧮', 'color' => 'x', 'user_id' => $user->id,
+        ]);
+        $item = FlashcardItem::create(['user_id' => $user->id, 'categoria_id' => $categoria->id, 'type' => 'summary']);
+
+        $response = $this->actingAs($user)->deleteJson("/api/categoria/{$categoria->id}");
+
+        $response->assertStatus(502);
+        $this->assertDatabaseHas('categorias', ['id' => $categoria->id]);
+        $this->assertDatabaseHas('flashcard_items', ['id' => $item->id]);
+    }
+
+    public function test_usuario_nao_exclui_categoria_de_outro_usuario_mesmo_com_flashcards(): void
+    {
+        Http::fake(); // nenhuma chamada deveria acontecer - 403 antes de tocar em Python
+
+        $dono = User::factory()->create(['role' => 'client']);
+        $atacante = User::factory()->create(['role' => 'client']);
+        $categoriaDoDono = Categoria::create([
+            'nome_categoria' => 'Do Dono', 'icon' => '📚', 'color' => 'x', 'user_id' => $dono->id,
+        ]);
+        $item = FlashcardItem::create(['user_id' => $dono->id, 'categoria_id' => $categoriaDoDono->id, 'type' => 'summary']);
+
+        $this->actingAs($atacante)->deleteJson("/api/categoria/{$categoriaDoDono->id}")->assertStatus(403);
+
+        $this->assertDatabaseHas('categorias', ['id' => $categoriaDoDono->id]);
+        $this->assertDatabaseHas('flashcard_items', ['id' => $item->id]);
+        Http::assertNothingSent();
     }
 }
