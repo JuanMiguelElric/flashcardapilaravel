@@ -181,13 +181,93 @@ class FlashcardTest extends TestCase
         });
     }
 
+    /**
+     * @return \Illuminate\Support\Collection<int, FlashcardItem>
+     */
+    private function criarFlashcards(User $user, Categoria $categoria, int $quantidade): \Illuminate\Support\Collection
+    {
+        return collect(range(1, $quantidade))->map(fn () => FlashcardItem::create([
+            'user_id' => $user->id, 'categoria_id' => $categoria->id, 'type' => 'summary',
+        ]));
+    }
+
+    private function fakePythonIndexPara(User $user, Categoria $categoria, \Illuminate\Support\Collection $items): void
+    {
+        Http::fake(['*/flashcard/index*' => Http::response([
+            [
+                'usuario' => $user->id,
+                'categoria' => $categoria->nome_categoria,
+                'tipo' => 'summary',
+                'flashcards' => $items->map(fn ($item) => [
+                    'flashcard_id' => $item->id,
+                    'question' => "Pergunta {$item->id}",
+                    'summary' => "Resposta {$item->id}",
+                ])->all(),
+            ],
+        ], 200)]);
+    }
+
+    public function test_paginacao_primeira_pagina_com_metadados_corretos(): void
+    {
+        $user = $this->clientUser();
+        $categoria = $this->categoriaDe($user);
+        $items = $this->criarFlashcards($user, $categoria, 5);
+        $this->fakePythonIndexPara($user, $categoria, $items);
+
+        $response = $this->actingAs($user)->getJson('/api/flashcard/index?page=1&per_page=2');
+
+        $response->assertStatus(200)->assertJsonCount(2, 'data');
+        $this->assertSame(1, $response->json('current_page'));
+        $this->assertSame(2, $response->json('per_page'));
+        $this->assertSame(5, $response->json('total'));
+        $this->assertSame(3, $response->json('last_page'));
+        $this->assertSame($items[0]->id, $response->json('data.0.id'));
+        $this->assertSame($items[1]->id, $response->json('data.1.id'));
+    }
+
+    public function test_paginacao_pagina_intermediaria(): void
+    {
+        $user = $this->clientUser();
+        $categoria = $this->categoriaDe($user);
+        $items = $this->criarFlashcards($user, $categoria, 5);
+        $this->fakePythonIndexPara($user, $categoria, $items);
+
+        $response = $this->actingAs($user)->getJson('/api/flashcard/index?page=2&per_page=2');
+
+        $response->assertStatus(200)->assertJsonCount(2, 'data');
+        $this->assertSame(2, $response->json('current_page'));
+        $this->assertSame($items[2]->id, $response->json('data.0.id'));
+        $this->assertSame($items[3]->id, $response->json('data.1.id'));
+    }
+
+    public function test_paginacao_pagina_inexistente_retorna_vazio_sem_chamar_python(): void
+    {
+        $user = $this->clientUser();
+        $categoria = $this->categoriaDe($user);
+        $this->criarFlashcards($user, $categoria, 5);
+        Http::fake(); // nenhuma chamada deveria acontecer - paginator vazio de antemão
+
+        $response = $this->actingAs($user)->getJson('/api/flashcard/index?page=10&per_page=2');
+
+        $response->assertStatus(200)->assertJsonCount(0, 'data');
+        $this->assertSame(10, $response->json('current_page'));
+        Http::assertNothingSent();
+    }
+
+    public function test_paginacao_per_page_acima_do_teto_maximo_e_rejeitada(): void
+    {
+        $user = $this->clientUser();
+
+        $this->actingAs($user)->getJson('/api/flashcard/index?per_page=200')->assertStatus(422);
+    }
+
     public function test_index_so_retorna_flashcards_do_usuario_mesmo_que_python_vaze_outros(): void
     {
         $userA = $this->clientUser();
         $userB = $this->clientUser();
         $categoriaA = $this->categoriaDe($userA, 'Categoria A');
 
-        FlashcardItem::create(['user_id' => $userA->id, 'categoria_id' => $categoriaA->id, 'type' => 'summary']);
+        $itemA = FlashcardItem::create(['user_id' => $userA->id, 'categoria_id' => $categoriaA->id, 'type' => 'summary']);
 
         // Resposta do Python "vazando" (propositalmente, para o teste)
         // dados de outro usuário junto - o Laravel precisa filtrar de novo.
@@ -197,7 +277,7 @@ class FlashcardTest extends TestCase
                 'categoria' => 'Categoria A',
                 'tipo' => 'summary',
                 'flashcards' => [
-                    ['question' => 'Capital do Brasil', 'summary' => 'Brasília'],
+                    ['flashcard_id' => $itemA->id, 'question' => 'Capital do Brasil', 'summary' => 'Brasília'],
                 ],
             ],
             [
@@ -212,8 +292,8 @@ class FlashcardTest extends TestCase
 
         $response = $this->actingAs($userA)->getJson('/api/flashcard/index');
 
-        $response->assertStatus(200)->assertJsonCount(1);
-        $this->assertSame('Capital do Brasil', $response->json('0.question'));
+        $response->assertStatus(200)->assertJsonCount(1, 'data');
+        $this->assertSame('Capital do Brasil', $response->json('data.0.question'));
     }
 
     /**

@@ -19,7 +19,7 @@ class PlanosController extends Controller
     }
     public function index()
     {
-        //
+        return response()->json($this->planoRepository->listar());
     }
 
     /**
@@ -31,7 +31,10 @@ class PlanosController extends Controller
             "name_plano"=>"required|string",
             "Descricao"=> "required|string",
             "valor"=> "required|numeric",
-            "desconto"=>"required|integer"
+            "desconto"=>"required|integer",
+            // Sem valor padrão de negócio definido - null = sem limite
+            // aplicado (ver PlanLimitService). Opcional propositalmente.
+            "limite_flashcards"=>"nullable|integer|min:0",
         ]);
 
         return $this->planoRepository->cadastro($data);
@@ -42,7 +45,7 @@ class PlanosController extends Controller
      */
     public function show(Plano $plano)
     {
-        //
+        return response()->json($this->planoRepository->buscar($plano->id));
     }
 
     /**
@@ -54,7 +57,8 @@ class PlanosController extends Controller
             "name_plano"=>"required|string",
             "Descricao"=>"required|string",
             "valor"=>"required|numeric",
-            "desconto"=>"required|integer"
+            "desconto"=>"required|integer",
+            "limite_flashcards"=>"nullable|integer|min:0",
             ]);
 
             return $this->planoRepository->editarPlano($plano->id, $data);
@@ -65,6 +69,8 @@ class PlanosController extends Controller
      */
     public function destroy(Plano $plano)
     {
-        //
+        $this->planoRepository->deletar($plano->id);
+
+        return response()->json(null, 204);
     }
 }

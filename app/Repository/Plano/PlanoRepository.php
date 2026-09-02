@@ -23,10 +23,23 @@ class PlanoRepository implements PlanosInterface{
         $plano = Plano::where("id", $id)->first();
         if($plano->update($array)){
             return response()->json(["success"=> true,"Plano editado comsucesso"=>$plano->id],201);
-        } 
+        }
     }
 
+    public function listar()
+    {
+        return Plano::all();
+    }
 
+    public function buscar($id)
+    {
+        return Plano::findOrFail($id);
+    }
+
+    public function deletar($id)
+    {
+        Plano::findOrFail($id)->delete();
+    }
 
 }
 

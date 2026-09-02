@@ -64,4 +64,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(FlashcardItem::class);
     }
+
+    public function planoSelecionado(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PlanoSelecionado::class, 'id_usuario')->where('status', 1);
+    }
+
+    /**
+     * Plano ativo do usuário, ou null se nenhum foi selecionado
+     * (comportamento padrão hoje: nenhum usuário tem plano_selecionado
+     * até chamar POST /plano/selecionar - sem isso, PlanLimitService não
+     * aplica nenhum limite).
+     */
+    public function planoAtivo(): ?Plano
+    {
+        return $this->planoSelecionado?->plano;
+    }
 }

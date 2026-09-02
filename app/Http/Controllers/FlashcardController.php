@@ -10,13 +10,31 @@ use Illuminate\Http\Request;
 
 class FlashcardController extends Controller
 {
+    /**
+     * Padrão de paginação para GET /flashcard/index - não inferível de
+     * nenhum padrão existente no projeto (nenhum outro endpoint pagina
+     * hoje), então documentado aqui como decisão de engenharia razoável,
+     * não uma regra de negócio.
+     */
+    private const DEFAULT_PER_PAGE = 20;
+
+    private const MAX_PER_PAGE = 100;
+
     public function __construct(private FlashcardService $flashcardService)
     {
     }
 
     public function index(Request $request)
     {
-        return response()->json($this->flashcardService->listForUser($request->user()));
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_PER_PAGE],
+        ]);
+
+        $page = $validated['page'] ?? 1;
+        $perPage = $validated['per_page'] ?? self::DEFAULT_PER_PAGE;
+
+        return response()->json($this->flashcardService->listForUser($request->user(), $page, $perPage));
     }
 
     public function store(StoreFlashcardRequest $request)

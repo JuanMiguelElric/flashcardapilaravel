@@ -18,11 +18,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class FlashcardService
 {
-    public function __construct(private FlashcardServiceClient $client) {}
+    public function __construct(
+        private FlashcardServiceClient $client,
+        private PlanLimitService $planLimitService,
+    ) {}
 
     public function create(User $user, array $data): array
     {
         $categoria = $this->ownedCategoria($user, $data['categoryId']);
+        $this->planLimitService->assertFlashcardLimitNotExceeded($user);
 
         return DB::transaction(function () use ($user, $categoria, $data) {
             $item = FlashcardItem::create([
@@ -40,17 +44,26 @@ class FlashcardService
         });
     }
 
-    public function listForUser(User $user): array
+    /**
+     * @return \Illuminate\Pagination\LengthAwarePaginator com a coleção
+     * substituída pelo conteúdo mesclado (MySQL define o conjunto/ordem da
+     * página; Python é só fonte do conteúdo - ver mergeContent).
+     */
+    public function listForUser(User $user, int $page, int $perPage): \Illuminate\Pagination\LengthAwarePaginator
     {
-        $items = FlashcardItem::with('categoria')->where('user_id', $user->id)->get();
+        $paginator = FlashcardItem::with('categoria')
+            ->where('user_id', $user->id)
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'page', $page);
 
-        if ($items->isEmpty()) {
-            return [];
+        if ($paginator->isEmpty()) {
+            return $paginator;
         }
 
-        $raw = $this->client->fetchIndexForUser($user->id);
+        $raw = $this->client->fetchIndexForUser($user->id, $page, $perPage);
+        $merged = $this->mergeContent($paginator->getCollection(), $raw, $user->id);
 
-        return $this->mergeContent($items, $raw, $user->id);
+        return $paginator->setCollection(collect($merged));
     }
 
     public function update(FlashcardItem $item, User $user, array $data): array
@@ -251,6 +264,17 @@ class FlashcardService
             }
         }
 
-        return $result;
+        // A página é definida pelo MySQL (fonte de verdade) - o Python pode
+        // devolver conteúdo fora dela (ordenação própria, ou conteúdo de um
+        // item já excluído no MySQL mas ainda não removido no Neo4j).
+        // Filtra e reordena o resultado para bater exatamente com a página
+        // de flashcard_items pedida.
+        $order = $items->pluck('id')->flip();
+
+        return collect($result)
+            ->filter(fn ($fc) => $fc['id'] !== null && $order->has($fc['id']))
+            ->sortBy(fn ($fc) => $order[$fc['id']])
+            ->values()
+            ->all();
     }
 }

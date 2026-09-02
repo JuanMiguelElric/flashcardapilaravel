@@ -55,15 +55,27 @@ class FlashcardServiceClient
      * Busca o conteúdo dos flashcards de um usuário.
      *
      * $userId vem sempre de Auth::id() no Laravel, nunca de input do
-     * cliente. Enviamos como filtro para o Python (quando ele passar a
-     * suportar), mas o chamador (FlashcardService) NÃO deve confiar
-     * cegamente nesse filtro - deve validar novamente contra os
-     * flashcard_items pertencentes a este usuário no MySQL.
+     * cliente. Enviamos como filtro para o Python, mas o chamador
+     * (FlashcardService) NÃO deve confiar cegamente nesse filtro - deve
+     * validar novamente contra os flashcard_items pertencentes a este
+     * usuário no MySQL.
+     *
+     * $page/$perPage espelham a página MySQL sendo servida (mesma
+     * ordenação por id) - o Python já suporta esses parâmetros
+     * (IndexQueryParams), mas antes desta mudança o Laravel nunca os
+     * enviava, então o conteúdo vinha sempre limitado ao DEFAULT_PAGE_SIZE
+     * (50) do Python, independente da página real do MySQL. FlashcardService
+     * ainda limita o resultado final aos ids da página MySQL - Python aqui
+     * é só fonte de conteúdo, não de paginação.
      */
-    public function fetchIndexForUser(int $userId): array
+    public function fetchIndexForUser(int $userId, int $page = 1, int $perPage = 50): array
     {
         return $this->send(
-            fn () => $this->request()->get('/flashcard/index', ['user_id' => $userId]),
+            fn () => $this->request()->get('/flashcard/index', [
+                'user_id' => $userId,
+                'page' => $page,
+                'per_page' => $perPage,
+            ]),
             'fetchIndexForUser'
         );
     }
