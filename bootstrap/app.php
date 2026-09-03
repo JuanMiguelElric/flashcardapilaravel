@@ -2,6 +2,7 @@
 
 
 use App\Exceptions\FlashcardServiceException;
+use App\Exceptions\MercadoPagoException;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -35,6 +36,14 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*')) {
                 return response()->json([
                     'message' => 'Serviço de flashcards indisponível no momento. Tente novamente em instantes.',
+                ], 502);
+            }
+        });
+
+        $exceptions->render(function (MercadoPagoException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'message' => 'Serviço de pagamento indisponível no momento. Tente novamente em instantes.',
                 ], 502);
             }
         });

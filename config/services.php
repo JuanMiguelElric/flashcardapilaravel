@@ -57,4 +57,27 @@ return [
         'retry_delay_ms' => env('FLASHCARD_SERVICE_RETRY_DELAY_MS', 150),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mercado Pago (assinaturas / preapproval)
+    |--------------------------------------------------------------------------
+    |
+    | Gateway de pagamento real dos planos Premium/Institucional. Usa a API
+    | de Assinaturas (preapproval) - cobrança recorrente, não pagamento
+    | avulso - porque o cancelamento mantém acesso até o fim do período já
+    | pago (decisão de produto), o que só faz sentido com uma assinatura.
+    | access_token/webhook_secret precisam ser preenchidos com credenciais
+    | reais (sandbox ou produção) para o fluxo funcionar de ponta a ponta.
+    |
+    */
+
+    'mercadopago' => [
+        'base_url' => env('MERCADOPAGO_BASE_URL', 'https://api.mercadopago.com'),
+        'access_token' => env('MERCADOPAGO_ACCESS_TOKEN'),
+        'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
+        'timeout' => env('MERCADOPAGO_TIMEOUT', 10),
+        'retry_times' => env('MERCADOPAGO_RETRY_TIMES', 3),
+        'retry_delay_ms' => env('MERCADOPAGO_RETRY_DELAY_MS', 150),
+    ],
+
 ];
