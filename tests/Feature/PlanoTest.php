@@ -28,18 +28,19 @@ class PlanoTest extends TestCase
 
     public function test_usuario_nao_admin_nao_cria_plano(): void
     {
-        foreach (['client', 'premium'] as $role) {
-            $user = User::factory()->create(['role' => $role]);
+        // 'premium' deixou de ser um role valido (migrate_role_premium_
+        // to_plano_and_drop_enum_value) - so 'client' resta para testar
+        // aqui.
+        $user = User::factory()->create(['role' => 'client']);
 
-            $this->actingAs($user)->postJson('/api/plano', [
-                'name_plano' => 'Premium',
-                'Descricao' => 'Acesso completo',
-                'valor' => 29.9,
-                'desconto' => 0,
-            ])->assertStatus(403);
-        }
+        $this->actingAs($user)->postJson('/api/plano', [
+            'name_plano' => 'Turbo',
+            'Descricao' => 'Acesso completo',
+            'valor' => 29.9,
+            'desconto' => 0,
+        ])->assertStatus(403);
 
-        $this->assertDatabaseMissing('planos', ['name_plano' => 'Premium']);
+        $this->assertDatabaseMissing('planos', ['name_plano' => 'Turbo']);
     }
 
     public function test_requisicao_sem_autenticacao_nao_acessa_rotas_de_plano(): void
@@ -86,13 +87,16 @@ class PlanoTest extends TestCase
 
     public function test_admin_lista_planos(): void
     {
+        // seed_planos_oficiais ja garante Gratuito/Premium/Institucional -
+        // a asserção conta a partir dessa base em vez de assumir tabela
+        // vazia.
         $admin = User::factory()->create(['role' => 'admin']);
-        Plano::create(['name_plano' => 'Gratuito', 'Descricao' => 'Básico', 'valor' => 0, 'desconto' => 0]);
-        Plano::create(['name_plano' => 'Premium', 'Descricao' => 'Completo', 'valor' => 29.9, 'desconto' => 0]);
+        $totalAntes = Plano::count();
+        Plano::create(['name_plano' => 'Turbo', 'Descricao' => 'Completo', 'valor' => 39.9, 'desconto' => 0]);
 
         $response = $this->actingAs($admin)->getJson('/api/plano');
 
-        $response->assertStatus(200)->assertJsonCount(2);
+        $response->assertStatus(200)->assertJsonCount($totalAntes + 1);
     }
 
     public function test_usuario_nao_admin_nao_lista_nem_ve_nem_exclui_planos(): void
@@ -120,8 +124,11 @@ class PlanoTest extends TestCase
 
     public function test_usuario_seleciona_o_proprio_plano(): void
     {
+        // Premium ja existe via seed_planos_oficiais - reutiliza em vez de
+        // criar um duplicado (gravarPlano busca por name_plano e pegaria
+        // o primeiro registro, não necessariamente o criado aqui).
         $user = User::factory()->create(['role' => 'client']);
-        $plano = Plano::create(['name_plano' => 'Premium', 'Descricao' => 'Completo', 'valor' => 29.9, 'desconto' => 0]);
+        $plano = Plano::where('name_plano', 'Premium')->firstOrFail();
 
         $this->actingAs($user)->postJson('/api/plano/selecionar', ['name_plano' => 'Premium'])
             ->assertStatus(201);
@@ -143,8 +150,8 @@ class PlanoTest extends TestCase
     public function test_trocar_de_plano_desativa_a_selecao_anterior(): void
     {
         $user = User::factory()->create(['role' => 'client']);
-        $gratuito = Plano::create(['name_plano' => 'Gratuito', 'Descricao' => 'Básico', 'valor' => 0, 'desconto' => 0]);
-        $premium = Plano::create(['name_plano' => 'Premium', 'Descricao' => 'Completo', 'valor' => 29.9, 'desconto' => 0]);
+        $gratuito = Plano::where('name_plano', 'Gratuito')->firstOrFail();
+        $premium = Plano::where('name_plano', 'Premium')->firstOrFail();
 
         $this->actingAs($user)->postJson('/api/plano/selecionar', ['name_plano' => 'Gratuito'])->assertStatus(201);
         $this->actingAs($user)->postJson('/api/plano/selecionar', ['name_plano' => 'Premium'])->assertStatus(201);

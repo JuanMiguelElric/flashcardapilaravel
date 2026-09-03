@@ -6,13 +6,17 @@ use App\Interfaces\CategoriaInterface;
 use App\Models\Categoria;
 use App\Models\User;
 use App\Services\FlashcardService;
+use App\Services\PlanLimitService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CategoriaRepository implements CategoriaInterface
 {
-    public function __construct(private FlashcardService $flashcardService) {}
+    public function __construct(
+        private FlashcardService $flashcardService,
+        private PlanLimitService $planLimitService,
+    ) {}
 
     public function categoriaIndexCriados(User $user)
     {
@@ -21,6 +25,8 @@ class CategoriaRepository implements CategoriaInterface
 
     public function categoriaDeCriarConteudo(array $data, User $user)
     {
+        $this->planLimitService->assertCategoriaLimitNotExceeded($user);
+
         $categoria = new Categoria(array_merge($data, ['user_id' => $user->id]));
 
         if (! $categoria->save()) {

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Categoria;
 use App\Models\FlashcardItem;
+use App\Models\Plano;
+use App\Models\PlanoSelecionado;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -17,6 +19,18 @@ class FlashcardTest extends TestCase
     private function clientUser(): User
     {
         return User::factory()->create(['role' => 'client']);
+    }
+
+    /**
+     * Usuário sem plano_selecionado (padrão do factory) cai no fallback
+     * Gratuito de PlanLimitService::resolveActivePlano - Gratuito não
+     * permite áudio/múltipla escolha, então testes que não são
+     * especificamente sobre esse gate precisam de um plano Premium ativo.
+     */
+    private function ativarPremium(User $user): void
+    {
+        $premium = Plano::where('name_plano', 'Premium')->firstOrFail();
+        PlanoSelecionado::create(['id_usuario' => $user->id, 'id_plano' => $premium->id, 'status' => 1]);
     }
 
     private function categoriaDe(User $user, string $nome = 'Matemática'): Categoria
@@ -165,6 +179,7 @@ class FlashcardTest extends TestCase
         Http::fake(['*/submit_flash' => Http::response(['status' => 'ok'], 200)]);
 
         $user = $this->clientUser();
+        $this->ativarPremium($user);
         $categoria = $this->categoriaDe($user);
 
         $this->actingAs($user)->postJson('/api/flashcard', [

@@ -3,12 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Repository\Plano\PlanoSelecionado\PlanoSelecionadoRepository;
+use App\Services\PlanLimitService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private PlanoSelecionadoRepository $planoSelecionadoRepository,
+        private PlanLimitService $planLimitService,
+    ) {}
+
     public function login(Request $request)
     {
         $data = $request->validate([
@@ -36,7 +43,10 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json(['user' => $request->user()]);
+        return response()->json([
+            'user' => $request->user(),
+            'plano' => $this->planLimitService->resolveActivePlano($request->user()),
+        ]);
     }
 
     public function register(Request $request)
@@ -55,18 +65,18 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // O React só exibe a escolha de plano DEPOIS do cadastro (ver
-        // PlanSelectionModal em memory-spark) - nenhum plano é enviado
-        // neste payload. O usuário nasce com o role default do banco
-        // ('client'); associar um plano/role diferente é um fluxo
-        // separado, ainda não integrado ao backend (ver relatório de
-        // gaps - Payment.tsx é mock hoje, sem chamada real à API).
         $user = User::create([
             'name' => $request->string('name'),
             'email' => $request->string('email'),
             'password' => Hash::make($request->string('password')),
             'role' => 'client',
         ]);
+
+        // Todo cadastro novo recebe o plano Gratuito automaticamente
+        // (decisão de produto) - React ainda pode oferecer upgrade
+        // depois via PlanSelectionModal -> POST /assinatura/checkout,
+        // mas o usuário já nasce com um plano ativo real.
+        $this->planoSelecionadoRepository->gravarPlano($user->id, 'Gratuito');
 
         $token = $user->createToken($user->role.'-token')->plainTextToken;
 

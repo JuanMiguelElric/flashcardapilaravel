@@ -27,6 +27,7 @@ class FlashcardService
     {
         $categoria = $this->ownedCategoria($user, $data['categoryId']);
         $this->planLimitService->assertFlashcardLimitNotExceeded($user);
+        $this->planLimitService->assertFlashcardTypeAllowed($user, $data['type']);
 
         return DB::transaction(function () use ($user, $categoria, $data) {
             $item = FlashcardItem::create([
@@ -74,9 +75,15 @@ class FlashcardService
             ? $this->ownedCategoria($user, $data['categoryId'])
             : $item->categoria;
 
-        return DB::transaction(function () use ($item, $categoria, $user, $data) {
+        // Checa o tipo FINAL resolvido (não só $data['type'], que pode
+        // estar ausente num update parcial) - impede trocar um flashcard
+        // de texto pra áudio via update contornando o gate do create().
+        $tipoFinal = $data['type'] ?? $item->type;
+        $this->planLimitService->assertFlashcardTypeAllowed($user, $tipoFinal);
+
+        return DB::transaction(function () use ($item, $categoria, $user, $data, $tipoFinal) {
             $item->categoria_id = $categoria->id;
-            $item->type = $data['type'] ?? $item->type;
+            $item->type = $tipoFinal;
             $item->save();
 
             // $data['type'] pode estar ausente num update parcial - usar

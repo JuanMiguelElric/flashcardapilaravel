@@ -35,6 +35,11 @@ class PlanosController extends Controller
             // Sem valor padrão de negócio definido - null = sem limite
             // aplicado (ver PlanLimitService). Opcional propositalmente.
             "limite_flashcards"=>"nullable|integer|min:0",
+            "limite_categorias"=>"nullable|integer|min:0",
+            "permite_audio"=>"sometimes|boolean",
+            "permite_multipla_escolha"=>"sometimes|boolean",
+            "estatisticas_avancadas"=>"sometimes|boolean",
+            "max_alunos"=>"nullable|integer|min:0",
         ]);
 
         return $this->planoRepository->cadastro($data);
@@ -59,6 +64,11 @@ class PlanosController extends Controller
             "valor"=>"required|numeric",
             "desconto"=>"required|integer",
             "limite_flashcards"=>"nullable|integer|min:0",
+            "limite_categorias"=>"nullable|integer|min:0",
+            "permite_audio"=>"sometimes|boolean",
+            "permite_multipla_escolha"=>"sometimes|boolean",
+            "estatisticas_avancadas"=>"sometimes|boolean",
+            "max_alunos"=>"nullable|integer|min:0",
             ]);
 
             return $this->planoRepository->editarPlano($plano->id, $data);
